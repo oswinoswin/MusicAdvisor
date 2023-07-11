@@ -1,91 +1,94 @@
 package advisor;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Scanner;
+import java.io.IOException;
+import java.util.*;
 
 public class Menu {
     Scanner scanner;
-    ArrayList<String> categories;
+    Map<String, String> categoriesMap;
     boolean authenticated;
-    String redirectUri = "https://accounts.spotify.com/authorize?client_id=a19ee7dbfda443b2a8150c9101bfd645&redirect_uri=http://localhost:8080&response_type=code";
-    public Menu() {
+    static SimpleServer simpleServer;
+    static StaticViewer viewer;
+    public Menu(String accessUrl, String resourceUrl, int pageLimit) throws IOException {
         this.scanner = new Scanner(System.in);
         authenticated = false;
-        categories = new ArrayList<>();
-        categories.add("Top Lists");
-        categories.add("Pop");
-        categories.add("Mood");
-        categories.add("Latin");
+        simpleServer = new SimpleServer(accessUrl, resourceUrl);
+        viewer = new StaticViewer(pageLimit);
+        categoriesMap = new HashMap<>();
+
     }
 
-    public void displayMenu() {
+    public void displayMenu() throws InterruptedException {
         boolean exit = false;
         while (!exit){
             String input = scanner.nextLine();
             if ("auth".equals(input)) {
                 auth();
+            } if ("exit".equals(input)) {
+                exit = true;
+                close();
             } else if (!authenticated) {
                 System.out.println("Please, provide access for application.");
             }
-            if ("featured".equals(input) && authenticated)
+             else if ("featured".equals(input) && authenticated)
                 featured();
             else if ("new".equals(input) && authenticated) {
                 listNewAlbums();
             } else if ("categories".equals(input) && authenticated) {
                 showCategories();
             } else if (input.startsWith("playlists") && authenticated) {
-                String categoryName = input.split(" ")[1].strip();
+                String categoryName = input.replaceFirst("playlists ", "");
                 showPlaylists(categoryName);
-            } else if ("exit".equals(input)) {
-                exit = true;
-                close();
             }
 
         }
 
     }
 
-    private void auth() {
-
+    private void auth() throws InterruptedException {
+        simpleServer.getAccessToken();
         authenticated = true;
-        System.out.println(redirectUri);
+        categoriesMap = simpleServer.categoriesMap();
         System.out.println("---SUCCESS---");
     }
 
     private void showPlaylists(String categoryName) {
-        System.out.println("---%s PLAYLISTS---".formatted(categoryName.toUpperCase()));
-        System.out.println("Walk Like A Badass  \n" +
-                "Rage Beats  \n" +
-                "Arab Mood Booster  \n" +
-                "Sunday Stroll");
+        System.out.println("%s".formatted(categoryName.toUpperCase()));
+        if (!categoriesMap.containsKey(categoryName)){
+            System.out.println("Unknown category name.");
+        }else {
+            System.out.println("---%s PLAYLISTS---".formatted(categoryName.toUpperCase()));
+            String categoryID = categoriesMap.get(categoryName);
+            List<String> playlists = simpleServer.playlistsInCategory(categoryID);
+            viewer.showData(playlists);
+        }
+
     }
 
     private void close() {
+        simpleServer.close();
         System.out.println("---GOODBYE!---");
     }
 
     private void showCategories() {
         // a list of all available categories on Spotify (just their names)
         System.out.println("---CATEGORIES---\n");
-        categories.forEach(System.out::println);
+        List<String> categoriesList = simpleServer.categoriesList();
+        viewer.showData(categoriesList);
     }
 
     private void listNewAlbums() {
         //a list of new albums with artists and links on Spotify;
         System.out.println("---NEW RELEASES---\n");
-        System.out.println("Mountains [Sia, Diplo, Labrinth]\n" +
-                "Runaway [Lil Peep]\n" +
-                "The Greatest Show [Panic! At The Disco]\n" +
-                "All Out Life [Slipknot]");
+        List<String> newAlbums = simpleServer.newAlbumsList();
+        viewer.showData(newAlbums);
+
     }
 
     private void featured() {
         //a list of Spotify-featured playlists with their links fetched from API;
         System.out.println("---FEATURED---");
-        System.out.println("Mellow Morning\n" +
-                "Wake Up and Smell the Coffee\n" +
-                "Monday Motivation\n" +
-                "Songs to Sing in the Shower");
+        List<String> featured = simpleServer.featuredList();
+        viewer.showData(featured);
     }
 }
